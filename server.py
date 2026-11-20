@@ -18,14 +18,14 @@ def generate_code() -> str:
 
 def sanitize_username(raw_name, fallback: str) -> str:
     text = " ".join(str(raw_name or "").strip().split())
-    cleaned = "".join(ch for ch in text if ch.isalnum() or ch in (" ", "-", "_")).strip()
+    cleaned = "".join(ch for ch in text if ch.isalnum() or ch in (" ", "-", "_", ".")).strip()
     return cleaned[:20] or fallback
 
 
 def sanitize_room_name(raw_name) -> str:
     text = " ".join(str(raw_name or "").strip().split())
     cleaned = "".join(ch for ch in text if ch.isalnum() or ch in (" ", "-", "_", ":")).strip()
-    return cleaned[:28] or "UNNAMED-FREQ"
+    return cleaned[:28] or "UNNAMED-BOX"
 
 
 def get_public_rooms() -> list[dict]:
@@ -44,7 +44,7 @@ async def broadcast(room_code: str, payload: dict, exclude=None):
     room = ROOMS.get(room_code)
     if not room:
         return
-    message = json.dumps(payload)
+    message = json.dumps(payload, ensure_ascii=False)
     dead = []
     for ws in list(room["clients"]):
         if ws == exclude:
@@ -64,7 +64,7 @@ async def broadcast_public_list():
     message = json.dumps({
         "type": "public_rooms",
         "rooms": rooms_snapshot
-    })
+    }, ensure_ascii=False)
     dead = []
     for ws in list(CONNECTED_CLIENTS):
         try:
@@ -85,7 +85,7 @@ async def handler(websocket):
         await websocket.send(json.dumps({
             "type": "public_rooms",
             "rooms": get_public_rooms()
-        }))
+        }, ensure_ascii=False))
 
         async for raw in websocket:
             data = json.loads(raw)
@@ -99,13 +99,13 @@ async def handler(websocket):
                 await websocket.send(json.dumps({
                     "type": "username_set",
                     "callsign": callsign
-                }))
+                }, ensure_ascii=False))
 
             elif action == "list_public":
                 await websocket.send(json.dumps({
                     "type": "public_rooms",
                     "rooms": get_public_rooms()
-                }))
+                }, ensure_ascii=False))
 
             elif action == "create":
                 if str(data.get("username") or "").strip():
@@ -127,7 +127,7 @@ async def handler(websocket):
                     "visibility": visibility,
                     "callsign": callsign,
                     "peers": 1
-                }))
+                }, ensure_ascii=False))
                 if visibility == "public":
                     await broadcast_public_list()
 
@@ -139,8 +139,8 @@ async def handler(websocket):
                 if not room:
                     await websocket.send(json.dumps({
                         "type": "error",
-                        "message": "FREQUENCY NOT FOUND"
-                    }))
+                        "message": "CHANNEL NOT FOUND"
+                    }, ensure_ascii=False))
                     continue
                 room["clients"].add(websocket)
                 current_room = code
@@ -152,7 +152,7 @@ async def handler(websocket):
                     "visibility": room["visibility"],
                     "callsign": callsign,
                     "peers": peer_count
-                }))
+                }, ensure_ascii=False))
                 await broadcast(code, {
                     "type": "system",
                     "text": f"{callsign} TUNED IN ({peer_count} ONLINE)"
@@ -199,7 +199,7 @@ async def handler(websocket):
 async def main():
     port = int(os.environ.get("PORT", 8765))
     async with websockets.serve(handler, "0.0.0.0", port):
-        print(f"Walkie Relay active on port {port} (RAM-only)")
+        print(f"Black Box Relay active on port {port} (RAM-only)")
         await asyncio.Future()
 
 
